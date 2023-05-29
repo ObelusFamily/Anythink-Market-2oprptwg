@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 require_relative "../../lib/event"
-# require "openai"
-require 'uri'
-require 'net/http'
+require "ruby/openai"
 
 include Event
 
@@ -57,10 +55,12 @@ class ItemsController < ApplicationController
   def create
     @item = Item.new(item_params)
     @item.user = current_user
+    if @item.image.blank?
+      client = OpenAI::Client.new
+      response = client.images.generate(parameters: { prompt: "#{@item.title} #{@item.description}", size: "256x256" })
+      @item.image = response.dig("data", 0, "url")
+    end 
 
-    if @item.image.exists? == false 
-      @item.image = create_image(:title, :description)
-    end  
 
     if @item.save
       sendEvent("item_created", { item: item_params })
@@ -104,34 +104,4 @@ class ItemsController < ApplicationController
     params.require(:item).permit(:title, :description, :image, tag_list: [])
   end
 
-  def create_image(title, description)
-    # Authorization: Bearer OPENAI_API_KEY
-    # curl https://api.openai.com/v1/images/generations \
-    # -H "Content-Type: application/json" \
-    # -H "Authorization: Bearer $OPENAI_API_KEY" \
-    # -d '{
-    #   "prompt": "A cute baby sea otter",
-    #   "n": 2,
-    #   "size": "1024x1024"
-    # }'
-
-    # uri = URI('https://jsonplaceholder.typicode.com/posts')
-    # res = Net::HTTP.post_form(uri, 'title' => 'foo', 'body' => 'bar', 'userID' => 1)
-    # puts res.body  if res.is_a?(Net::HTTPSuccess)
-
-    url = "https://api.openai.com/v1/images/generations" 
-    header = {
-      Content-Type: "application/json", 
-      Authorization: "Bearer #{OPENAI_API_KEY}"
-      Parameters: {
-        "prompt": "#{title} #{description}",
-        "n": 1,
-        "size": "256x256"
-      }
-    }
-    uri = URI(url)
-    res = Net::HTTP.post_form(uri, header)
-    res.body  if res.is_a?(Net::HTTPSuccess)
-
-  end 
 end
